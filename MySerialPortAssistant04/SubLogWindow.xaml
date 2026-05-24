@@ -1,0 +1,35 @@
+﻿<Window x:Class="MySerialPortAssistant04.SubLogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="子串口日志解析器" Height="700" Width="900"
+        WindowStartupLocation="CenterOwner" Background="#F5F5F5">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <GroupBox Header="过滤规则" Grid.Row="0" Margin="0 0 0 5" Padding="8">
+            <WrapPanel VerticalAlignment="Center">
+                <TextBlock Text="正则过滤：" VerticalAlignment="Center"/>
+                <TextBox x:Name="TxtFilterRegex" Width="300" Margin="5 0" Text=".*" />
+                <Button x:Name="BtnApplyFilter" Content="应用过滤" Width="80" Click="BtnApplyFilter_Click" Margin="5 0"/>
+                <Button x:Name="BtnClearLog" Content="清空日志" Width="80" Click="BtnClearLog_Click" Margin="5 0"/>
+            </WrapPanel>
+        </GroupBox>
+
+        <GroupBox Header="过滤后日志" Grid.Row="1" Margin="0 0 0 5">
+            <TextBox x:Name="TxtLogOutput"
+                     IsReadOnly="True"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Auto"
+                     FontFamily="Consolas"
+                     FontSize="12"
+                     Background="Black"
+                     Foreground="LightGreen"
+                     Margin="2"
+                     AcceptsReturn="True"
+                     TextWrapping="Wrap"/>
+        </GroupBox>
+    </Grid>
+</Window>
