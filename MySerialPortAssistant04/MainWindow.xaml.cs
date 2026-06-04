@@ -2,6 +2,7 @@
 using System.Windows.Controls;
 using Microsoft.Win32;
 using MySerialPortAssistant04.Services.Configuration;
+using MySerialPortAssistant04.Services.UI;
 
 namespace MySerialPortAssistant04;
 
@@ -15,6 +16,7 @@ public partial class MainWindow : Window
 
     private readonly AppConfigService _appConfig = new();
     private List<SerialPortMonitorControl> _portControls = null!;
+    private readonly TaskbarConnectionBadge _taskbarBadge;
     private string _sharedLogFilePath = "";
     private bool _isMasterMonitoring;
 
@@ -35,8 +37,10 @@ public partial class MainWindow : Window
         public MainWindow()
         {
             InitializeComponent();
+            _taskbarBadge = new TaskbarConnectionBadge(this);
             InitializePorts();
             LoadConfig();
+            UpdateTaskbarConnectedCount();
         }
 
         /// <summary>启动时从 config.txt 恢复共享 dbglog 路径。</summary>
@@ -225,6 +229,7 @@ public partial class MainWindow : Window
                 RebuildLayout();
                 RefreshControlIndices();
                 UpdateButtonStates();
+                UpdateTaskbarConnectedCount();
             });
         }
 
@@ -338,6 +343,7 @@ public partial class MainWindow : Window
             {
                 _isMasterMonitoring = true;
                 UpdateMasterToggleButtonState();
+                UpdateTaskbarConnectedCount();
                 txtStatus.Text = $"已开启 {startedCount} 个串口监听 | 日志: {Path.GetFileName(_sharedLogFilePath)}";
             }
             else
@@ -370,6 +376,7 @@ public partial class MainWindow : Window
 
             _isMasterMonitoring = false;
             UpdateMasterToggleButtonState();
+            UpdateTaskbarConnectedCount();
             txtStatus.Text = $"已关闭所有串口监听 | 日志: {Path.GetFileName(_sharedLogFilePath)}";
         }
 
@@ -400,13 +407,14 @@ public partial class MainWindow : Window
         /// </summary>
         public void NotifyChildMonitorStopped()
         {
-            // 检查是否还有任何串口在监听
             bool anyMonitoring = _portControls.Any(c => c.IsMonitoring);
             if (!anyMonitoring && _isMasterMonitoring)
             {
                 _isMasterMonitoring = false;
                 UpdateMasterToggleButtonState();
             }
+
+            UpdateTaskbarConnectedCount();
         }
 
         /// <summary>
@@ -420,6 +428,17 @@ public partial class MainWindow : Window
                 _isMasterMonitoring = true;
                 UpdateMasterToggleButtonState();
             }
+
+            UpdateTaskbarConnectedCount();
+        }
+
+        /// <summary>
+        /// 刷新任务栏图标上的已连接串口数角标。
+        /// </summary>
+        public void UpdateTaskbarConnectedCount()
+        {
+            int connected = _portControls.Count(c => c.IsMonitoring);
+            _taskbarBadge.Update(connected);
         }
 
         private void BtnSelectLog_Click(object sender, RoutedEventArgs e)
@@ -483,6 +502,7 @@ public partial class MainWindow : Window
 
             await Task.WhenAll(cleanupTasks).WaitAsync(TimeSpan.FromSeconds(3)).ContinueWith(_ => { });
             _portControls.Clear();
+            UpdateTaskbarConnectedCount();
             base.OnClosed(e);
         }
 

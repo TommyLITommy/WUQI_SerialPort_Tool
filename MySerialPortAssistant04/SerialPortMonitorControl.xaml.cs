@@ -143,7 +143,7 @@ public partial class SerialPortMonitorControl : UserControl
         InitializeLogFile();
         StartMonitor(port);
 
-        if (Window.GetWindow(this) is MainWindow mainWindow)
+        if (_isMonitoring && Window.GetWindow(this) is MainWindow mainWindow)
             mainWindow.NotifyChildMonitorStarted();
     }
 
@@ -327,20 +327,12 @@ public partial class SerialPortMonitorControl : UserControl
 
         string? port = CboSerialPort.SelectedItem?.ToString();
         if (!string.IsNullOrEmpty(port))
-        {
-            _portSettings.SaveLastPort(port);
-            InitializeLogFile();
-            StartMonitor(port);
-        }
+            StartMonitorInternal();
     }
 
     private void BtnStopMonitor_Click(object sender, RoutedEventArgs e)
     {
-        StopMonitor();
-        CloseLogFile();
-
-        if (Window.GetWindow(this) is MainWindow mainWindow)
-            mainWindow.NotifyChildMonitorStopped();
+        StopMonitorInternal();
     }
 
     private void BtnClearLog_Click(object sender, RoutedEventArgs e)
