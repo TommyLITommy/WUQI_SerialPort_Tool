@@ -14,9 +14,7 @@ namespace MySerialPortAssistant04
         private readonly ConcurrentQueue<string> _logQueue = new ConcurrentQueue<string>();
         private readonly DispatcherTimer _timer;
 
-        // 状态标记
-        private bool _isFilterEnabled = false;
-        private Regex? _regex = null;
+        private Regex? _regex;
 
         // 高亮样式
         private readonly Brush _highlightBrush = Brushes.Yellow;
@@ -49,13 +47,6 @@ namespace MySerialPortAssistant04
             };
             _timer.Tick += (s, e) => RefreshLog();
             _timer.Start();
-
-            // 绑定状态
-            if (CbEnableRegex != null)
-            {
-                CbEnableRegex.Checked += (s, e) => _isFilterEnabled = true;
-                CbEnableRegex.Unchecked += (s, e) => _isFilterEnabled = false;
-            }
         }
 
         /// <summary>
@@ -102,7 +93,7 @@ namespace MySerialPortAssistant04
         {
             matches = null;
 
-            if (!_isFilterEnabled || _regex == null)
+            if (_regex == null)
                 return true;
 
             matches = _regex.Matches(log);
@@ -122,7 +113,7 @@ namespace MySerialPortAssistant04
             };
 
             // 无高亮高速模式
-            if (!_isFilterEnabled || _regex == null || matches == null || matches.Count == 0)
+            if (_regex == null || matches == null || matches.Count == 0)
             {
                 paragraph.Inlines.Add(new Run(log) { Foreground = _textColor });
                 TxtLog.Document.Blocks.Add(paragraph);
@@ -160,25 +151,20 @@ namespace MySerialPortAssistant04
 
         private void BtnFilter_Click(object sender, RoutedEventArgs e)
         {
+            string pattern = TxtKeyword.Text.Trim();
+            if (string.IsNullOrEmpty(pattern))
+            {
+                _regex = null;
+                return;
+            }
+
             try
             {
-                _isFilterEnabled = CbEnableRegex.IsChecked == true;
-                string keyword = TxtKeyword.Text.Trim();
-
-                if (_isFilterEnabled && !string.IsNullOrEmpty(keyword))
-                {
-                    _regex = new Regex(keyword, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-                }
-                else
-                {
-                    _regex = null;
-                }
+                _regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"正则表达式错误：{ex.Message}", "提示", MessageBoxButton.OK, MessageBoxImage.Warning);
-                CbEnableRegex.IsChecked = false;
-                _isFilterEnabled = false;
                 _regex = null;
             }
         }

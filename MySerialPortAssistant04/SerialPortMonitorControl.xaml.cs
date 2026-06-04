@@ -76,7 +76,11 @@ public partial class SerialPortMonitorControl : UserControl
     private readonly Queue<string> _logQueue = new();
     private readonly object _logLock = new();
     private Timer? _logFlushTimer;
+    private ScrollViewer? _logScrollViewer;
     private bool _isUserScrollingAway;
+    private bool _logUiFlushScheduled;
+    private bool _suppressLogScrollTracking;
+    private const double LogScrollBottomThreshold = 4.0;
 
     private int _totalPacketsReceived;
     private int _totalPacketsParsed;
@@ -110,19 +114,9 @@ public partial class SerialPortMonitorControl : UserControl
             _webLogServer.Start();
             LoadSavedPort();
 
-            var scrollViewer = TxtLogOutput.Template?.FindName("PART_ContentHost", TxtLogOutput) as ScrollViewer;
-            if (scrollViewer != null)
-            {
-                scrollViewer.ScrollChanged += (_, args) =>
-                {
-                    if (args.ExtentHeightChange == 0)
-                    {
-                        const double threshold = 10.0;
-                        _isUserScrollingAway = scrollViewer.VerticalOffset <
-                                               scrollViewer.ScrollableHeight - threshold;
-                    }
-                };
-            }
+            _logScrollViewer = TxtLogOutput.Template?.FindName("PART_ContentHost", TxtLogOutput) as ScrollViewer;
+            if (_logScrollViewer != null)
+                _logScrollViewer.ScrollChanged += OnLogScrollChanged;
 
             AppendLog($"=== Serial Monitor #{ControlIndex} Started ===");
             AppendLog($"🌐 Web Log: http://localhost:{_instanceWebPort}");
@@ -421,46 +415,128 @@ public partial class SerialPortMonitorControl : UserControl
 
     private void LogFlushCallback(object? state)
     {
-        List<string>? batch = null;
         lock (_logLock)
         {
             if (_logQueue.Count == 0) return;
-            int take = Math.Min(LogBatchSize, _logQueue.Count);
-            batch = new List<string>(take);
-            for (int i = 0; i < take; i++)
-                batch.Add(_logQueue.Dequeue());
         }
 
-        string content = string.Join(Environment.NewLine, batch) + Environment.NewLine;
+        if (_logUiFlushScheduled) return;
+        _logUiFlushScheduled = true;
+
+        Dispatcher.BeginInvoke(FlushLogQueueToUi, DispatcherPriority.Background);
+    }
+
+    private void OnLogScrollChanged(object sender, ScrollChangedEventArgs args)
+    {
+        if (_suppressLogScrollTracking || args.ExtentHeightChange != 0)
+            return;
+
+        _isUserScrollingAway = !IsLogScrolledToBottom();
+    }
+
+    private bool IsLogScrolledToBottom()
+    {
+        if (_logScrollViewer == null)
+            return !_isUserScrollingAway;
+
+        if (_logScrollViewer.ScrollableHeight <= 0)
+            return true;
+
+        return _logScrollViewer.VerticalOffset >=
+               _logScrollViewer.ScrollableHeight - LogScrollBottomThreshold;
+    }
+
+    private void FlushLogQueueToUi()
+    {
+        _logUiFlushScheduled = false;
+
+        const int maxLinesPerFrame = 400;
+        int drained = 0;
+        var chunks = new List<string>();
+
+        while (drained < maxLinesPerFrame)
+        {
+            List<string>? batch = null;
+            lock (_logLock)
+            {
+                if (_logQueue.Count == 0) break;
+                int take = Math.Min(LogBatchSize, _logQueue.Count);
+                batch = new List<string>(take);
+                for (int i = 0; i < take; i++)
+                    batch.Add(_logQueue.Dequeue());
+            }
+
+            chunks.Add(string.Join(Environment.NewLine, batch) + Environment.NewLine);
+            drained += batch.Count;
+        }
+
+        if (chunks.Count == 0) return;
+
+        bool stickToBottom = !_isUserScrollingAway && IsLogScrolledToBottom();
+        TxtLogOutput.AppendText(string.Concat(chunks));
+        TrimLogIfNeeded();
+
+        if (stickToBottom)
+            ScheduleScrollLogToEnd();
+
+        lock (_logLock)
+        {
+            if (_logQueue.Count > 0 && !_logUiFlushScheduled)
+            {
+                _logUiFlushScheduled = true;
+                Dispatcher.BeginInvoke(FlushLogQueueToUi, DispatcherPriority.Background);
+            }
+        }
+    }
+
+    private void TrimLogIfNeeded()
+    {
+        if (TxtLogOutput.LineCount <= MaxLogLines + 500) return;
+
+        string txt = TxtLogOutput.Text;
+        int removeLines = TxtLogOutput.LineCount - MaxLogLines;
+        if (removeLines <= 100) return;
+
+        int idx = -1;
+        int removed = 0;
+        for (int i = 0; i < txt.Length && removed < removeLines; i++)
+        {
+            if (txt[i] == '\n') removed++;
+            if (removed == removeLines) { idx = i + 1; break; }
+        }
+
+        if (idx > 0)
+            TxtLogOutput.Text = txt[idx..];
+    }
+
+    private void ScheduleScrollLogToEnd()
+    {
+        ScrollLogToEnd();
         Dispatcher.BeginInvoke(() =>
         {
             if (!_isUserScrollingAway)
-            {
-                TxtLogOutput.AppendText(content);
-                TxtLogOutput.ScrollToEnd();
-            }
-            else
-            {
-                TxtLogOutput.AppendText(content);
-            }
+                ScrollLogToEnd();
+        }, DispatcherPriority.Loaded);
+    }
 
-            if (TxtLogOutput.LineCount > MaxLogLines + 500)
-            {
-                string txt = TxtLogOutput.Text;
-                int removeLines = TxtLogOutput.LineCount - MaxLogLines;
-                if (removeLines > 100)
-                {
-                    int idx = -1;
-                    int removed = 0;
-                    for (int i = 0; i < txt.Length && removed < removeLines; i++)
-                    {
-                        if (txt[i] == '\n') removed++;
-                        if (removed == removeLines) { idx = i + 1; break; }
-                    }
-                    if (idx > 0) TxtLogOutput.Text = txt[idx..];
-                }
-            }
-        }, DispatcherPriority.Background);
+    private void ScrollLogToEnd()
+    {
+        _suppressLogScrollTracking = true;
+        try
+        {
+            int end = TxtLogOutput.Text.Length;
+            TxtLogOutput.CaretIndex = end;
+            TxtLogOutput.SelectionStart = end;
+            TxtLogOutput.SelectionLength = 0;
+            TxtLogOutput.ScrollToEnd();
+
+            if (_logScrollViewer != null)
+                _logScrollViewer.ScrollToVerticalOffset(_logScrollViewer.ExtentHeight);
+        }
+        finally
+        {
+            _suppressLogScrollTracking = false;
+        }
     }
 
     private void UpdateStats()

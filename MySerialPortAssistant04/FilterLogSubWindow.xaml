@@ -31,7 +31,6 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- 关键词输入框 -->
@@ -47,7 +46,7 @@
                                      AlignmentY="Center" 
                                      Stretch="None">
                             <VisualBrush.Visual>
-                                <TextBlock Text="输入关键词过滤..." 
+                                <TextBlock Text="输入正则表达式，点击「应用过滤」..." 
                                            Foreground="#FF999999" 
                                            Margin="8 0 0 0"/>
                             </VisualBrush.Visual>
@@ -66,16 +65,8 @@
                     </TextBox.Style>
                 </TextBox>
 
-                <!-- 启用正则 -->
-                <CheckBox x:Name="CbEnableRegex" 
-                          Grid.Column="1"
-                          Content="启用正则表达式" 
-                          Margin="0 0 15 0"
-                          VerticalAlignment="Center"
-                          FontSize="12"/>
-
                 <!-- 应用过滤按钮 -->
-                <Button Grid.Column="2" 
+                <Button Grid.Column="1" 
                         Content="应用过滤" 
                         Click="BtnFilter_Click" 
                         Height="28"
@@ -113,7 +104,7 @@
                 </Button>
 
                 <!-- 清空按钮 -->
-                <Button Grid.Column="3" 
+                <Button Grid.Column="2" 
                         Content="清空" 
                         Click="BtnClear_Click" 
                         Height="28"
